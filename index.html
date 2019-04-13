@@ -4,11 +4,65 @@
         <title>WebAuthn Demo</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="mobile-web-app-capable" content="yes">
-        <!-- skip favicon --> <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
-        <!-- <script src="https://rawgit.com/paroga/cbor-js/master/cbor.js" type="text/javascript"></script> -->
-        <script src="https://cdn.jsdelivr.net/gh/mvndaai/webauthn@master/webauthnHelper.js" type="text/javascript"></script>
+        <script type="text/javascript">
+            (function(global, undefined) {
+
+                function strToBin(str) {
+                    return Uint8Array.from(
+                        atob(str),
+                        function(c){ return c.charCodeAt(0); }
+                    );
+                }
+
+                function binToStr(bin){
+                    return btoa(new Uint8Array(bin).reduce(
+                            function(s, byte){ return s + String.fromCharCode(byte); }
+                            , ''
+                    ));
+                }
+
+                function parseClientDataJSON(clientDataJSON) {
+                    return JSON.parse(atob(binToStr(r.response.clientDataJSON)));
+                }
+
+                // See CBOR.io or https://github.com/paroga/cbor-jsa
+                function parseAttestationObject(attestationObject) {
+                    return CBOR.decode(attestationObject);
+                }
+
+                function unwrapPublicKeyCredential(cred) {
+                    let r = {response: {}};
+                    if ('id' in cred) r.id = cred.id
+                    if ('type' in cred) r.type = cred.type;
+                    if ('rawId' in cred) r.rawId = binToStr(cred.rawId);
+                    if ('response' in cred) {
+                        // Used in registration
+                        if ('clientDataJSON' in cred.response)
+                            r.response.clientDataJSON = binToStr(cred.response.clientDataJSON);
+                        if ('attestationObject' in cred.response)
+                            r.response.attestationObject = binToStr(cred.response.attestationObject);
+
+                        // Used in authentication
+                        if ('authenticatorData' in cred.response)
+                            r.response.authenticatorData = binToStr(cred.response.authenticatorData);
+                        if ('signature' in cred.response)
+                            r.response.signature = binToStr(cred.response.signature);
+                        if ('userHandle' in cred.response)
+                            r.response.userHandle = binToStr(cred.response.userHandle);
+                    }
+                    return r;
+                }
+
+                var obj = { strToBin, binToStr, parseClientDataJSON, parseAttestationObject, unwrapPublicKeyCredential };
+
+                if (typeof define === 'function' && define.amd) define('webauthnHelper', obj);
+                else if (typeof module !== 'undefined' && module.exports) module.exports = obj;
+                else if (!global.webauthnHelper) global.webauthnHelper = obj;
+
+            })(this);
+        </script>
         <script src='//unpkg.com/mithril/mithril.js'></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.4.3/css/bulma.min.css" integrity="sha256-VC9bpAao257nf22leBRLU7AqKGwS9/Ylz8hfpHmOob4=" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
         <style type="text/css">
             .notification {
                 position: fixed;
@@ -19,47 +73,103 @@
                 max-width: 80vw;
                 z-index: 100;
             }
+            html, body {
+            height: 100%;
+            }
+
             body {
-                min-height: 90vh;
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-align: center;
+            align-items: center;
+            padding-top: 40px;
+            padding-bottom: 40px;
+            background-color: #f5f5f5;
+            }
+
+            .form-signin {
+            width: 100%;
+            max-width: 530px;
+            padding: 15px;
+            margin: auto;
+            }
+            .form-signin .checkbox {
+            font-weight: 400;
+            }
+            .form-signin .form-control {
+            position: relative;
+            box-sizing: border-box;
+            height: auto;
+            padding: 10px;
+            font-size: 16px;
+            }
+            .form-signin .form-control:focus {
+            z-index: 2;
+            }
+            .form-signin input[type="email"] {
+            margin-bottom: -1px;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
+            }
+            .form-signin input[type="password"] {
+            margin-bottom: 10px;
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
             }
         </style>
     </head>
     <body>
+
+        <form class="form-signin">
+
+            <div class="alert alert-success" role="alert" id="loginin" style="display:none">
+                <h4 class="alert-heading">Well done!</h4>
+                <hr>
+                <p class="mb-0">Login in.</p>
+            </div>
+
+            <h1>Hello, world!</h1>
+            <h4>WebAuth Example</h4>
+    
+            <ul class="nav nav-tabs">
+                <li class="nav-item active">
+                    <a data-toggle="tab" class="nav-link active" href="#menu1">Register</a>
+                </li>
+                <li class="nav-item">
+                    <a data-toggle="tab" class="nav-link" href="#menu2">Login</a>
+                </li>
+            </ul>
+                
+            <div class="tab-content">
+                <div id="menu1" class="tab-pane active" style="padding:20px; background: #fff">
+                    <label for="username" class="sr-only">Username</label>
+                    <input type="text" id="username" class="form-control" placeholder="Username" required autofocus>
+                    <br />
+                    <button class="btn btn-lg btn-success btn-block" onsubmit="return false;" onclick="register();" type="button">Register</button>
+                </div>
+                <div id="menu2" class="tab-pane fade" style="padding:20px; background: #fff">
+                    <button class="btn btn-lg btn-success btn-block" onsubmit="return false;" onclick="sign();" type="button">Login</button>
+                </div>
+            </div>
+            <hr />
+            <p class="mt-5 mb-3 text-center">
+                <a href="https://github.com/hto" target="_blank">@github</a>
+                <a href="https://medium.com/@hto" target="_blank">@medium</a>
+                <a href="https://tr.linkedin.com/in/haliltugcanozaktas" target="_blank">@linkedin</a>
+            </p>
+        </form>
+        <script src="//code.jquery.com/jquery-1.11.2.min.js"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
         <script>
-            let toasts = [];
-            const Toast = {
-                close: () => { toasts.shift(); m.redraw(); },
-                view: vnode => toasts.length > 0 && m('.notification', {
-                    class: toasts[0].error ? "is-danger" : "is-success",
-                    oncreate() { this.timeoutId = window.setTimeout(vnode.state.close, 5000); },
-                    onremove() { window.clearTimeout(this.timeoutId); this.timeoutId = null; },
-                }, [
-                    m('button.delete', {onclick: vnode.state.close}),
-                    toasts[0].text,
-                ])
-            };
-
-            let users = [];
-            let loadingUsers = false;
-            function updateUsers() {
-                loadingUsers = true; m.redraw();
-                return m.request('/users')
-                    .then(r => users = r, () => users = [])
-                    .then(r => console.log(r))
-                    .then(_ => loadingUsers = false);
-            }
-
             function register(username, displayName, deviceName) {
-                //TODO - Add origin and device name
 
-                console.log("Attempting to register", username, displayName, deviceName)
+                username = displayName = deviceName = $("#username").val();
 
                 let data = {
                     deviceName: deviceName,
                     origin: window.location.origin,
                     user: { name: username, displayName: displayName },
                 }
-
 
                 let user = { name: username, displayName: displayName, origin: window.location.origin}
                 m.request({ method: "POST", url: "/registration/start", data })
@@ -68,16 +178,10 @@
                     r.publicKey.user.id = webauthnHelper.strToBin(r.publicKey.user.id);
                     return navigator.credentials.create(r);
                 })
-                .then(PublicKeyCredential => { // https://w3c.github.io/webauthn/#iface-pkcredential
+                .then(PublicKeyCredential => { 
+                    
+                    // https://w3c.github.io/webauthn/#iface-pkcredential
                     // https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential
-
-                    /* JavaScript print clientDataJSON */
-                    // let clientDataJSON = JSON.parse(atob(webauthnHelper.binToStr(r.response.clientDataJSON)));
-                    // console.log('clientDataJSON', JSON.stringify(clientDataJSON));
-
-                    /* JavaScript print attestationObject */
-                    // let attestationObject = CBOR.decode(r.response.attestationObject);
-                    // console.log('attestationObject', JSON.stringify(attestationObject))
 
                     let body = webauthnHelper.unwrapPublicKeyCredential(PublicKeyCredential);
                     body.user = user; // This is for the finding the user in the db
@@ -85,65 +189,24 @@
                     return m.request({ method: 'POST', url: '/registration/finish', data: body });
                 })
                 .then(r => {
-                    // console.log("repsonse from /registration/finish/", r);
-                    toasts.push({text: `Registartion complete for username: ${username}`});
-                    updateUsers();
+                    localStorage.setItem('username', $("#username").val());
+                    alert($("#username").val() + ", register is successful.");
                 })
                 .catch(e => {
                     console.error(e)
-                    toasts.push({error: true, text: e.toString()});
-                    updateUsers();
+                    alert(e);
                 });
             }
 
-            const RegisterUser = {
-                username: sessionStorage.getItem('regUsername'),
-                displayName: sessionStorage.getItem('regDisplayName'),
-                deviceName: sessionStorage.getItem('regDeviceName'),
-                view: vnode => m('.tile.is-child.box.is-primary', [
-                    m('h2.title.is-2', 'Register New User'),
-                    m('form', {
-                        onsubmit: e => {
-                            e.preventDefault();
-                            register(vnode.state.username, vnode.state.displayName, vnode.state.deviceName);
-                        },
-                    }, [
-                        m('.field', [
-                            m('label.label', 'Username'),
-                            m('control', m('input', {
-                                value: vnode.state.username, autocapitalize:'off',
-                                oninput: e => sessionStorage.setItem('regUsername', vnode.state.username = e.target.value),
-                            })),
-                        ]),
-                        m('.field', [
-                            m('label.label', 'Display Name'),
-                            m('control', m('input', {
-                                value: vnode.state.displayName,
-                                oninput: e => sessionStorage.setItem('regDisplayName', vnode.state.displayName = e.target.value),
-                            })),
-                        ]),
-                        m('.field', [
-                            m('label.label', 'Device Name'),
-                            m('control', m('input', {
-                                value: vnode.state.deviceName,
-                                oninput: e => sessionStorage.setItem('regDeviceName', vnode.state.deviceName = e.target.value),
-                            })),
-                        ]),
-                        m('button.button', {type: 'submit'}, 'Register'),
-                    ]),
-                ])
-            }
-
-            function login(username, deviceName){
+            function sign(username, deviceName){
+                username = deviceName = localStorage.getItem('username');
                 let data = { deviceName, user:{name: username}};
                 m.request({ method: "POST", url: "/authentication/start", data })
                 .then(o => {
                     console.log(o);
-
-                    updateUsers(); // Show the new challenge
                     let getCredentialArgs = {
                         publicKey: {
-                            timeout: 60000,
+                            timeout: 50000,
                             challenge: webauthnHelper.strToBin(o.challenge),
                             allowCredentials: [{
                                 id: webauthnHelper.strToBin(o.credentialId),
@@ -156,108 +219,18 @@
                 })
                 .then((assertion) => {
                     let body = webauthnHelper.unwrapPublicKeyCredential(assertion)
-                    body.user = {name: username}; //TODO probably remove this
+                    body.user = {name: username}; // ODO probably remove this
                     body.deviceName = deviceName;
                     return m.request({ method: "POST", url: "/authentication/finish", data: body });
                 })
                 .then(r => {
-                    updateUsers(); // Remove the challenge
-                    toasts.push({text: "Authentication successful"});
-                    // console.log(r);
+                    $("#loginin").show();
                 })
                 .catch((e) => {
-                    updateUsers(); // Remove the challenge
-                    toasts.push({error: true, text: e.toString()});
                     console.error(e);
+                    alert(e);
                 })
             };
-
-            const AuthenticateUser = {
-                username: sessionStorage.getItem('loginUsername'),
-                view: vnode => m('.tile.is-child.box.is-info', [
-                    m('h2.title.is-2', 'Authenticate User',
-                        m('button.button', {onclick: updateUsers, style: {float: "right", userSelect: 'none'} }, m.trust('&#x21bb;'))
-                    ),
-                    loadingUsers ? 'Updating users...' :
-                    (users.length == 0) ? 'No users registered' : [
-                        m('table.table.is-striped.is-bordered.is-narrow', [
-                            m('tbody.tbody',
-                                users.map(u => [
-                                    m('tr.tr', [
-                                        m('td.td',u.user.name),
-                                        m('td.td',u.user.displayName),
-                                        m('td.td',m('button.button.is-danger.is-small', {onclick: () => deleteUser(u.user.name)}, 'Delete User')),
-                                    ]),
-                                    m('tr.tr', m('td', {colspan:'3'}, [
-                                        u.devices && m('table.table.is-striped', [
-                                            // m('thead.thead', [
-                                            // m('th.th'),
-                                            //     m('th.th', 'Name'),
-                                            //     // m('th.th', 'credentialId'),
-                                            //     // m('th.th', 'challenge'),
-                                            //     // m('th.th', 'origin'),
-                                            //     m('th.th'),
-                                            // ]),
-                                            m('tbody.tbody',
-                                                // JSON.stringify(u.devices),
-                                                Object.keys(u.devices).map(k =>
-                                                    m('tr.tr', [
-                                                        m('td.td', m('button.button.is-small', {onclick: () => login(u.user.name, u.devices[k].name)}, 'Auth')),
-                                                        m('td.td', u.devices[k].name),
-                                                        // m('td.td', u.devices[k].credentialId),
-                                                        // m('td.td', u.devices[k].challenge),
-                                                        // m('td.td', u.devices[k].origin),
-                                                        m('td.td', m('button.button.is-small.is-danger', {onclick: () => deleteDevice(u.user.name, u.devices[k].name)}, 'Delete')),
-                                                    ]),
-
-                                                ),
-                                            ),
-                                        ]),
-                                    ])),
-                                ]),
-                            ),
-                        ]),
-                    ]
-                ])
-            }
-
-            function deleteUser(username) {
-                console.log('Deleting user:', username)
-                return m.request({method:'DELETE', url: `/users/${username}`}).then(updateUsers, updateUsers);
-            }
-
-            function deleteDevice(username, deviceName) {
-                console.log('Deleting device:', username, deviceName)
-                return m.request({method:'DELETE', url: `/users/${username}/${deviceName}`}).then(updateUsers, updateUsers);
-            }
-
-
-            const ForkOnGithub = {
-                view: () => m('a[href=https://github.com/mvndaai/webauthn_demo]',
-                    m('img', {
-                        style:'position: absolute; top: 0; right: 0; border: 0;',
-                        src:'https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png',
-                        alt:'Fork me on GitHub',
-                    }),
-                ),
-            }
-
-            const Layout = {
-                oninit: updateUsers(),
-                view: () => m('.container', [
-                    m(ForkOnGithub),
-                    m(Toast),
-                    m('section.hero.is-dark', m('.hero-body', m('.container',
-                        m('h1.title', 'WebAuthn Demo')))
-                    ),
-                    m('.tile.is-ancestor', m('.tile.is-parent', [
-                        m(RegisterUser),
-                        m(AuthenticateUser),
-                    ])),
-                ])
-            };
-
-            m.mount(document.body, Layout);
         </script>
     </body>
 </html>
