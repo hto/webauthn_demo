@@ -40,7 +40,9 @@ chrome://flags/#enable-web-authentication-touch-id
 * credentialId has a timeout period
 * The browser is stored inside, it can not be seen
 
-## How login works
+
+## How login works
+
 * challenge is generate on server
 * id (credentialId)
 
